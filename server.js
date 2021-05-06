@@ -18,6 +18,7 @@ const SECRET = cred.JWTSIGNSECRET;
 const JWTEXPIRY = cred.JWTEXPIRY;
 const CUNTRYCODE = cred.CUNTRYCODE;
 const APPNAME = cred.APPNAME;
+const OTPEXPIRY = cred.OTPEXPIRY;
 
 const awsSNS = new AWS.SNS({
     apiVersion: "2010-03-31",
@@ -60,16 +61,26 @@ function getData(key) {
     });
 }
 
-function setData(key, value) {
+function setData(key, value, isExpire) {
     console.log('[setData] function call ', key, value);
     return new Promise(function (resolve, reject) {
-        redis.set(key, JSON.stringify(value), function (err, reply) {
-            if (err) {
-                console.log(err);
-            }
-            console.log("redis.set ", reply);
-            resolve(reply);
-        });
+        if(isExpire) {
+            redis.setex(key, OTPEXPIRY ,JSON.stringify(value), function (err, reply) {
+                if (err) {
+                    console.log(err);
+                }
+                console.log("redis.setex ", reply);
+                resolve(reply);
+            });
+        } else {
+            redis.set(key, JSON.stringify(value), function (err, reply) {
+                if (err) {
+                    console.log(err);
+                }
+                console.log("redis.set ", reply);
+                resolve(reply);
+            });
+        }
     });
 }
 
@@ -156,6 +167,7 @@ app.post('/verify', async (req, resp) => {
 
 app.post('/sendtext', async (req, resp) => {
     console.log('[sendtext] Start', new Date());
+    console.log(JSON.stringify(req.body));
     var body = {};
     var OTP;
     if (req.body != undefined && req.body.phone != undefined) {
@@ -183,7 +195,8 @@ app.post('/sendtext', async (req, resp) => {
             console.log('[sendtext][After]: sendSMS ', Date());
 
             console.log('[sendtext][Before]: setData ', Date());
-            const redisSetReply = await setData(userid, OTP).then();
+            const isExpire = true;
+            const redisSetReply = await setData(userid, OTP, isExpire).then();
             console.log('[sendtext][After]: setData ', Date());
             console.log(redisSetReply);
             const response = {
